@@ -1,0 +1,6 @@
+node_modules/
+outputs/
+work/
+cloudflared
+*.log
+.DS_Store

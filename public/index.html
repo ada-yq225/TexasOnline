@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>朋友德州扑克</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- ===== Lobby / 大厅 ===== -->
+    <main id="lobbyView" class="lobby-view">
+      <header class="lobby-header">
+        <h1>朋友德州扑克</h1>
+        <p>和朋友一起玩德州扑克，最多 6 人一桌</p>
+      </header>
+      <form id="lobbyNameForm" class="lobby-name-form">
+        <input id="lobbyNameInput" maxlength="16" autocomplete="nickname" placeholder="输入你的昵称" />
+        <button type="submit">确认昵称</button>
+      </form>
+      <section class="lobby-actions">
+        <button id="createRoomBtn" type="button" class="lobby-primary">创建新房间</button>
+        <p class="lobby-divider">或加入已有房间</p>
+        <div id="roomList" class="room-list">
+          <p class="room-empty">暂无可用房间，快创建一个吧</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===== Table / 牌桌 ===== -->
+    <main id="tableView" class="shell" style="display:none">
+      <section class="topbar">
+        <div>
+          <h1>朋友德州扑克</h1>
+          <p id="roomLine">正在连接牌桌...</p>
+        </div>
+        <div class="top-actions">
+          <button id="copyLink" type="button">复制邀请链接</button>
+          <button id="leaveRoomBtn" type="button">离开房间</button>
+          <button id="backToLobby" type="button">返回大厅</button>
+        </div>
+      </section>
+
+      <section id="joinPanel" class="join-panel">
+        <div>
+          <h2>入座</h2>
+          <p>输入昵称后加入房间，同一房间最多 6 人。</p>
+        </div>
+        <form id="joinForm">
+          <input id="nameInput" maxlength="16" autocomplete="nickname" placeholder="你的昵称" />
+          <button type="submit">加入牌桌</button>
+        </form>
+      </section>
+
+      <section class="table-settings">
+        <form id="settingsForm" class="settings-form">
+          <label>
+            <span>小盲</span>
+            <input id="smallBlindInput" type="number" min="1" step="5" value="10" />
+          </label>
+          <label>
+            <span>大盲</span>
+            <input id="bigBlindInput" type="number" min="2" step="10" value="20" />
+          </label>
+          <label>
+            <span>默认买入</span>
+            <input id="buyInInput" type="number" min="40" step="100" value="1000" />
+          </label>
+          <label>
+            <span>买入上限</span>
+            <input id="maxBuyInInput" type="number" min="1000" step="100" value="5000" />
+          </label>
+          <button id="saveSettingsBtn" type="submit">保存牌桌</button>
+        </form>
+      </section>
+
+      <section class="table-wrap">
+        <div class="felt">
+          <div id="board" class="board"></div>
+          <div class="pot">
+            <span>底池</span>
+            <strong id="potValue">0</strong>
+          </div>
+          <div id="players" class="players"></div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="status">
+          <div>
+            <strong id="phaseText">大厅</strong>
+            <span id="turnText">等待玩家加入</span>
+          </div>
+          <div id="meStack" class="me-stack">未入座</div>
+        </div>
+        <div class="buyin-row">
+          <label class="buyin-box">
+            <span>补到</span>
+            <input id="rebuyInput" type="number" min="20" step="100" value="1000" />
+          </label>
+          <button id="rebuyBtn" type="button">买入/补码</button>
+          <button id="resetRoomBtn" type="button" class="reset-btn">重新开始</button>
+        </div>
+        <div class="quick-bets">
+          <button data-bet="min" type="button">最小加注</button>
+          <button data-bet="half" type="button">1/2 底池</button>
+          <button data-bet="pot" type="button">底池</button>
+          <button data-bet="allin" type="button">All in</button>
+        </div>
+        <div class="buttons">
+          <button id="startBtn" type="button">开始/下一手</button>
+          <button id="foldBtn" type="button">弃牌</button>
+          <button id="checkBtn" type="button">过牌</button>
+          <button id="callBtn" type="button">跟注</button>
+          <label class="raise-box">
+            <span>加注到</span>
+            <input id="raiseInput" type="number" min="20" step="10" value="40" />
+          </label>
+          <button id="raiseBtn" type="button">加注</button>
+        </div>
+      </section>
+
+      <aside class="log">
+        <h2>牌局记录</h2>
+        <ol id="logList"></ol>
+      </aside>
+
+      <!-- Chat panel -->
+      <aside class="chat-panel">
+        <h2>聊天</h2>
+        <div id="chatMessages" class="chat-messages"></div>
+        <form id="chatForm" class="chat-form">
+          <input id="chatInput" maxlength="200" placeholder="发送消息..." />
+          <button type="submit">发送</button>
+        </form>
+      </aside>
+    </main>
+
+    <!-- ===== Showdown Overlay ===== -->
+    <div id="showdownOverlay" class="showdown-overlay" hidden>
+      <div class="showdown-card">
+        <h2 id="showdownTitle">摊牌</h2>
+        <div id="showdownWinner" class="showdown-winner"></div>
+        <div id="showdownPlayers" class="showdown-players"></div>
+        <button id="showdownClose" type="button">关闭</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
