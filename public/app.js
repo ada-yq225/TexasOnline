@@ -8,8 +8,63 @@ const state = {
   name: localStorage.getItem("holdemName") || "",
   snapshot: null,
   view: "lobby", // "lobby" | "table"
-  showdownDismissed: false
+  showdownDismissed: false,
+  soundEnabled: true
 };
+
+// ===== Sound Effects (Web Audio API) =====
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, duration, type = "sine", volume = 0.08) {
+  if (!state.soundEnabled) return;
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch {}
+}
+
+function playCardSound() {
+  playTone(800, 0.06, "triangle", 0.05);
+  setTimeout(() => playTone(1000, 0.05, "triangle", 0.04), 50);
+}
+
+function playChipSound() {
+  playTone(600, 0.07, "square", 0.04);
+  setTimeout(() => playTone(800, 0.05, "square", 0.03), 60);
+}
+
+function playFoldSound() {
+  playTone(200, 0.12, "sine", 0.06);
+}
+
+function playWinSound() {
+  playTone(523, 0.12, "sine", 0.08);
+  setTimeout(() => playTone(659, 0.12, "sine", 0.07), 120);
+  setTimeout(() => playTone(784, 0.2, "sine", 0.08), 240);
+}
+
+function playTurnSound() {
+  playTone(440, 0.08, "triangle", 0.06);
+}
+
+function playAllInSound() {
+  playTone(300, 0.1, "sawtooth", 0.04);
+  setTimeout(() => playTone(500, 0.15, "sawtooth", 0.05), 80);
+}
 
 const phaseName = {
   lobby: "大厅",
@@ -169,6 +224,7 @@ function renderTop() {
 function render() {
   const snap = state.snapshot;
   if (!snap) return;
+  const prev = state._prevSnap;
   renderTop();
   const isMe = snap.players.find((p) => p.id === snap.viewerId);
   $("#joinPanel").style.display = state.name && isMe ? "none" : "flex";
@@ -188,6 +244,37 @@ function render() {
   if (snap.showdownResult && snap.phase === "showdown" && !state.showdownDismissed) {
     showShowdownOverlay(snap.showdownResult);
   }
+  // Sound effects based on state changes
+  if (prev) {
+    const prevPot = prev.pot;
+    const prevBoardLen = prev.board?.length || 0;
+    const curBoardLen = snap.board?.length || 0;
+    const prevPhase = prev.phase;
+    // Board cards dealt (flop/turn/river)
+    if (curBoardLen > prevBoardLen) {
+      playCardSound();
+      if (curBoardLen > prevBoardLen + 1) { setTimeout(() => playCardSound(), 120); setTimeout(() => playCardSound(), 240); }
+    }
+    // Pot increased (someone bet/called/raised)
+    if (snap.pot > prevPot && snap.phase !== "showdown") {
+      const diff = snap.pot - prevPot;
+      if (diff >= snap.bigBlind * 5) playAllInSound();
+      else playChipSound();
+    }
+    // Showdown / win
+    if (snap.phase === "showdown" && prevPhase !== "showdown" && snap.showdownResult) {
+      playWinSound();
+    }
+    // Fold detection: a player is now folded
+    if (snap.turnSeat !== prev.turnSeat && snap.phase !== "lobby" && snap.phase !== "showdown") {
+      const prevMe = prev.players?.find((p) => p.id === snap.viewerId);
+      const curMe = snap.players?.find((p) => p.id === snap.viewerId);
+      if (curMe?.seat === snap.turnSeat && !prevMe?.folded && !curMe?.folded) {
+        playTurnSound();
+      }
+    }
+  }
+  state._prevSnap = { pot: snap.pot, board: [...snap.board], phase: snap.phase, turnSeat: snap.turnSeat, players: snap.players.map((p) => ({ id: p.id, folded: p.folded, seat: p.seat })), bigBlind: snap.bigBlind };
 }
 
 function renderBoard(cards) {
@@ -202,10 +289,21 @@ function renderPlayers(snap) {
   snap.players.forEach((p) => {
     const seat = document.createElement("article");
     seat.className = `seat seat-${p.seat}${p.seat === snap.turnSeat ? " turn" : ""}${p.folded ? " folded" : ""}`;
+    const st = p.stats || {};
+    const winRate = st.handsPlayed > 0 ? Math.round((st.handsWon / st.handsPlayed) * 100) : 0;
+    const vpip = st.vpipHands > 0 ? Math.round((st.vpipCount / st.vpipHands) * 100) : 0;
+    const profit = st.totalProfit || 0;
+    const profitStr = profit > 0 ? `+${profit}` : `${profit}`;
+    const profitClass = profit > 0 ? "profit-up" : profit < 0 ? "profit-down" : "";
+    let posBadge = "";
+    if (p.seat === snap.dealer) posBadge = '<span class="badge dealer">D</span>';
+    else if (p.seat === snap.sbSeat) posBadge = '<span class="badge sb">SB</span>';
+    else if (p.seat === snap.bbSeat) posBadge = '<span class="badge bb">BB</span>';
     seat.innerHTML = `
       <div class="player-head">
         <span class="name">${escapeHtml(p.name)}</span>
         ${p.isHost ? '<span class="badge">房</span>' : ""}
+        ${posBadge}
       </div>
       <div class="cards"></div>
       <div class="chips">
@@ -213,6 +311,11 @@ function renderPlayers(snap) {
         <span class="bet">${p.bet ? `本轮 ${p.bet}` : p.allIn ? "All in" : p.folded ? "已弃牌" : ""}</span>
       </div>
       <div class="committed">${p.committed ? `已投入 ${p.committed}` : p.connected ? "在线" : "离线"}</div>
+      <div class="player-stats">
+        <span title="胜率">🏆${winRate}%</span>
+        <span title="入池率">💰${vpip}%</span>
+        <span class="${profitClass}" title="总收益">📈${profitStr}</span>
+      </div>
     `;
     const cards = seat.querySelector(".cards");
     (p.cards.length ? p.cards : [null, null]).forEach((card) => cards.append(cardEl(card)));
@@ -396,6 +499,11 @@ $("#leaveRoomBtn")?.addEventListener("click", () => {
 
 $("#resetRoomBtn")?.addEventListener("click", () => {
   send({ type: "resetRoom" });
+});
+
+$("#soundToggle")?.addEventListener("click", () => {
+  state.soundEnabled = !state.soundEnabled;
+  $("#soundToggle").textContent = state.soundEnabled ? "🔊" : "🔇";
 });
 
 $("#settingsForm")?.addEventListener("submit", (event) => {

@@ -112,7 +112,8 @@ function makeRoom(roomId) {
     handNumber: 0,
     log: ["房间已创建，等待朋友加入。"],
     chat: [],
-    showdownResult: null
+    showdownResult: null,
+    stats: {} // playerId -> { handsPlayed, handsWon, vpipHands, vpipCount, totalProfit }
   };
 }
 
@@ -155,9 +156,13 @@ function stateFor(room, viewerId) {
     buyIn: room.buyIn,
     maxBuyIn: room.maxBuyIn,
     handNumber: room.handNumber,
+    dealer: room.dealer,
+    sbSeat: room.sbSeat,
+    bbSeat: room.bbSeat,
     players: room.seats.map((p) => {
       const item = publicPlayer(p, viewerId, room.phase);
       item.isHost = p.id === room.hostId;
+      item.stats = room.stats[p.id] || { handsPlayed: 0, handsWon: 0, vpipHands: 0, vpipCount: 0, totalProfit: 0 };
       return item;
     }),
     log: room.log.slice(-12),
@@ -242,10 +247,20 @@ function startHand(room) {
   });
   const sb = room.seats.length === 2 ? room.dealer : nextActiveSeat(room, room.dealer, true);
   const bb = nextActiveSeat(room, sb, true);
+  room.sbSeat = sb;
+  room.bbSeat = bb;
   postBlind(room, sb, room.smallBlind, "小盲");
   postBlind(room, bb, room.bigBlind, "大盲");
   room.turnSeat = nextActiveSeat(room, bb);
   if (room.turnSeat === null) settleAllInOrAdvance(room);
+  // Track hands played & VPIP opportunities
+  room.seats.forEach((p) => {
+    if (p.chips > 0) {
+      if (!room.stats[p.id]) room.stats[p.id] = { handsPlayed: 0, handsWon: 0, vpipHands: 0, vpipCount: 0, totalProfit: 0 };
+      room.stats[p.id].handsPlayed += 1;
+      room.stats[p.id].vpipHands += 1;
+    }
+  });
   log(room, `第 ${room.handNumber} 手牌开始，庄位是 ${room.seats[room.dealer].name}`);
 }
 
@@ -313,6 +328,16 @@ function finishByFold(room) {
   const winner = livePlayers(room)[0];
   if (winner) {
     winner.chips += room.pot;
+    if (room.stats[winner.id]) {
+      room.stats[winner.id].handsWon += 1;
+      room.stats[winner.id].totalProfit += room.pot;
+    }
+    // Deduct each player's committed chips from their totalProfit
+    room.seats.forEach((p) => {
+      if (p.committed > 0 && room.stats[p.id]) {
+        room.stats[p.id].totalProfit -= p.committed;
+      }
+    });
     log(room, `${winner.name} 赢得底池 ${room.pot}`);
   }
   room.phase = "showdown";
@@ -342,10 +367,23 @@ function showdown(room) {
     return;
   }
   const payouts = distributePots(room, scored);
-  for (const payout of payouts) payout.player.chips += payout.amount;
+  for (const payout of payouts) {
+    payout.player.chips += payout.amount;
+    if (room.stats[payout.player.id]) room.stats[payout.player.id].totalProfit += payout.amount;
+  }
+  // Deduct each player's committed chips from their totalProfit
+  room.seats.forEach((p) => {
+    if (p.committed > 0 && room.stats[p.id]) {
+      room.stats[p.id].totalProfit -= p.committed;
+    }
+  });
   const best = scored.sort((a, b) => compareScore(b.score, a.score))[0].score;
   const winners = scored.filter((x) => compareScore(x.score, best) === 0).map((x) => x.player.name);
   const winnerIds = scored.filter((x) => compareScore(x.score, best) === 0).map((x) => x.player.id);
+  // Track wins
+  winnerIds.forEach((id) => {
+    if (room.stats[id]) room.stats[id].handsWon += 1;
+  });
   // Build showdown result for display
   room.showdownResult = {
     winners: winnerIds,
@@ -415,6 +453,8 @@ function action(room, playerId, kind, amount = 0) {
     room.pot += paid;
     p.acted = true;
     if (p.chips === 0) p.allIn = true;
+    // Track VPIP: voluntarily put money in pot (call when > 0 to call means putting money in)
+    if (toCall > 0 && room.stats[p.id]) room.stats[p.id].vpipCount += 1;
     log(room, p.allIn && paid < toCall ? `${p.name} All in ${paid}` : `${p.name} 跟注 ${paid}`);
   } else if (kind === "raise" || kind === "allIn") {
     const raiseTo = kind === "allIn" ? p.bet + p.chips : Math.max(0, Number(amount) || 0);
@@ -440,6 +480,8 @@ function action(room, playerId, kind, amount = 0) {
         });
       }
     }
+    // Track VPIP
+    if (room.stats[p.id]) room.stats[p.id].vpipCount += 1;
     log(room, p.allIn ? `${p.name} All in 到 ${p.bet}` : `${p.name} 从 ${oldBet} 加注到 ${p.bet}`);
   }
   moveTurn(room);

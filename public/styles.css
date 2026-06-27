@@ -166,12 +166,23 @@ h2 {
 }
 
 .join-panel {
-  grid-column: 1 / -1;
+  grid-column: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 18px;
   padding: 14px;
+  flex-wrap: wrap;
+}
+
+.buyin-panel {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
 }
 
 #joinForm {
@@ -184,7 +195,7 @@ h2 {
 }
 
 .table-settings {
-  grid-column: 1 / -1;
+  grid-column: 1;
   padding: 12px;
 }
 
@@ -343,6 +354,23 @@ h2 {
   font-size: 12px;
 }
 
+.badge.dealer {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-weight: 800;
+}
+
+.badge.sb {
+  background: rgba(76, 175, 132, 0.25);
+  color: #4caf84;
+}
+
+.badge.bb {
+  background: rgba(76, 175, 132, 0.35);
+  color: #4caf84;
+  font-weight: 800;
+}
+
 .cards {
   display: flex;
   gap: 7px;
@@ -388,6 +416,24 @@ h2 {
   font-size: 12px;
 }
 
+.player-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 2px;
+}
+
+.player-stats .profit-up {
+  color: #4caf84;
+  font-weight: 700;
+}
+
+.player-stats .profit-down {
+  color: var(--red);
+  font-weight: 700;
+}
+
 .controls {
   grid-column: 1;
   padding: 12px;
@@ -414,8 +460,9 @@ h2 {
 }
 
 .buyin-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .quick-bets {
@@ -432,13 +479,26 @@ h2 {
   min-height: 42px;
 }
 
-.log {
+.sidebar {
   grid-column: 2;
-  grid-row: 4 / 6;
-  min-height: 300px;
-  max-height: 400px;
+  grid-row: 2 / span 4;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding-top: 0;
+}
+
+.log {
+  flex: 1;
+  min-height: 140px;
   padding: 14px;
   overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
 }
 
 .log ol {
@@ -475,7 +535,7 @@ h2 {
   .shell {
     width: min(100% - 20px, 760px);
     grid-template-columns: 1fr;
-    padding-top: 10px;
+    padding-top: 0;
   }
 
   .topbar,
@@ -578,10 +638,13 @@ h2 {
     grid-column: span 2;
   }
 
-  .log {
+  .sidebar {
     grid-column: 1;
     grid-row: auto;
-    min-height: 220px;
+  }
+
+  .log {
+    min-height: 160px;
   }
 }
 
@@ -801,10 +864,8 @@ h2 {
 
 /* ===== Chat Panel ===== */
 .chat-panel {
-  grid-column: 2;
-  grid-row: 5 / 7;
-  min-height: 280px;
-  max-height: 380px;
+  flex: 0 0 auto;
+  height: 350px;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -992,36 +1053,28 @@ h2 {
 }
 
 /* ===== Reset button ===== */
-.reset-btn {
+#resetRoomBtn {
   background: linear-gradient(180deg, #91404a, #4b1d23);
-}
-
-/* ===== Shell grid update for chat ===== */
-.shell {
-  width: min(1220px, calc(100vw - 28px));
-  margin: 0 auto;
-  padding: 18px 0 34px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 318px;
-  gap: 14px;
 }
 
 /* ===== Responsive updates ===== */
 @media (max-width: 980px) {
-  .chat-panel {
+  .sidebar {
     grid-column: 1;
     grid-row: auto;
-    min-height: 220px;
-    max-height: 300px;
+  }
+
+  .chat-panel {
+    height: 300px;
   }
 
   .log {
-    min-height: 200px;
     max-height: 260px;
+    min-height: 120px;
   }
 
   .buyin-row {
-    grid-template-columns: minmax(140px, 1fr) auto auto;
+    flex-wrap: wrap;
   }
 }
 
@@ -1036,6 +1089,6 @@ h2 {
   }
 
   .buyin-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-wrap: wrap;
   }
 }

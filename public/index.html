@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>朋友德州扑克</title>
+    <title>德州扑克</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <!-- ===== Lobby / 大厅 ===== -->
     <main id="lobbyView" class="lobby-view">
       <header class="lobby-header">
-        <h1>朋友德州扑克</h1>
+        <h1>德州扑克</h1>
         <p>和朋友一起玩德州扑克，最多 6 人一桌</p>
       </header>
       <form id="lobbyNameForm" class="lobby-name-form">
@@ -30,13 +30,15 @@
     <main id="tableView" class="shell" style="display:none">
       <section class="topbar">
         <div>
-          <h1>朋友德州扑克</h1>
+          <h1>德州扑克</h1>
           <p id="roomLine">正在连接牌桌...</p>
         </div>
         <div class="top-actions">
           <button id="copyLink" type="button">复制邀请链接</button>
           <button id="leaveRoomBtn" type="button">离开房间</button>
           <button id="backToLobby" type="button">返回大厅</button>
+          <button id="resetRoomBtn" type="button" class="reset-btn">重新开始</button>
+          <button id="soundToggle" type="button" title="开关音效">🔊</button>
         </div>
       </section>
 
@@ -50,6 +52,32 @@
           <button type="submit">加入牌桌</button>
         </form>
       </section>
+
+      <aside class="sidebar">
+        <div id="buyinPanel" class="buyin-panel">
+          <div class="buyin-row">
+            <label class="buyin-box">
+              <span>补到</span>
+              <input id="rebuyInput" type="number" min="20" step="100" value="1000" />
+            </label>
+            <button id="rebuyBtn" type="button">买入/补码</button>
+          </div>
+        </div>
+
+        <div class="chat-panel">
+          <h2>聊天</h2>
+          <div id="chatMessages" class="chat-messages"></div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" maxlength="200" placeholder="发送消息..." />
+            <button type="submit">发送</button>
+          </form>
+        </div>
+
+        <div class="log">
+          <h2>牌局记录</h2>
+          <ol id="logList"></ol>
+        </div>
+      </aside>
 
       <section class="table-settings">
         <form id="settingsForm" class="settings-form">
@@ -92,14 +120,6 @@
           </div>
           <div id="meStack" class="me-stack">未入座</div>
         </div>
-        <div class="buyin-row">
-          <label class="buyin-box">
-            <span>补到</span>
-            <input id="rebuyInput" type="number" min="20" step="100" value="1000" />
-          </label>
-          <button id="rebuyBtn" type="button">买入/补码</button>
-          <button id="resetRoomBtn" type="button" class="reset-btn">重新开始</button>
-        </div>
         <div class="quick-bets">
           <button data-bet="min" type="button">最小加注</button>
           <button data-bet="half" type="button">1/2 底池</button>
@@ -118,21 +138,6 @@
           <button id="raiseBtn" type="button">加注</button>
         </div>
       </section>
-
-      <aside class="log">
-        <h2>牌局记录</h2>
-        <ol id="logList"></ol>
-      </aside>
-
-      <!-- Chat panel -->
-      <aside class="chat-panel">
-        <h2>聊天</h2>
-        <div id="chatMessages" class="chat-messages"></div>
-        <form id="chatForm" class="chat-form">
-          <input id="chatInput" maxlength="200" placeholder="发送消息..." />
-          <button type="submit">发送</button>
-        </form>
-      </aside>
     </main>
 
     <!-- ===== Showdown Overlay ===== -->
