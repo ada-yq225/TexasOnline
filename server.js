@@ -107,6 +107,8 @@ function makeRoom(roomId) {
     maxBuyIn: 5000,
     currentBet: 0,
     minRaise: 20,
+    bettingReopened: true,
+    reopenBet: 40,
     turnSeat: null,
     lastAggressor: null,
     handNumber: 0,
@@ -235,6 +237,8 @@ function startHand(room) {
   room.pot = 0;
   room.currentBet = room.bigBlind;
   room.minRaise = room.bigBlind;
+  room.bettingReopened = true;
+  room.reopenBet = room.bigBlind * 2;
   room.dealer = nextOccupied(room, room.dealer);
   room.seats.forEach((p, idx) => {
     p.seat = idx;
@@ -245,6 +249,14 @@ function startHand(room) {
     p.allIn = false;
     p.acted = false;
   });
+  // Track hands played before blinds, so short stacks all-in from blinds still count.
+  room.seats.forEach((p) => {
+    if (p.cards.length) {
+      if (!room.stats[p.id]) room.stats[p.id] = { handsPlayed: 0, handsWon: 0, vpipHands: 0, vpipCount: 0, totalProfit: 0 };
+      room.stats[p.id].handsPlayed += 1;
+      room.stats[p.id].vpipHands += 1;
+    }
+  });
   const sb = room.seats.length === 2 ? room.dealer : nextActiveSeat(room, room.dealer, true);
   const bb = nextActiveSeat(room, sb, true);
   room.sbSeat = sb;
@@ -253,14 +265,6 @@ function startHand(room) {
   postBlind(room, bb, room.bigBlind, "大盲");
   room.turnSeat = nextActiveSeat(room, bb);
   if (room.turnSeat === null) settleAllInOrAdvance(room);
-  // Track hands played & VPIP opportunities
-  room.seats.forEach((p) => {
-    if (p.chips > 0) {
-      if (!room.stats[p.id]) room.stats[p.id] = { handsPlayed: 0, handsWon: 0, vpipHands: 0, vpipCount: 0, totalProfit: 0 };
-      room.stats[p.id].handsPlayed += 1;
-      room.stats[p.id].vpipHands += 1;
-    }
-  });
   log(room, `第 ${room.handNumber} 手牌开始，庄位是 ${room.seats[room.dealer].name}`);
 }
 
@@ -294,11 +298,15 @@ function resetBets(room) {
   });
   room.currentBet = 0;
   room.minRaise = room.bigBlind;
+  room.bettingReopened = true;
+  room.reopenBet = room.bigBlind;
 }
 
 function advanceStreet(room) {
   if (livePlayers(room).length <= 1) return finishByFold(room);
-  if (playablePlayers(room).length === 0) return settleAllInOrAdvance(room);
+  const playable = playablePlayers(room);
+  // If only 0 or 1 player can still act and others are all-in, no more action needed → run it out
+  if (playable.length <= 1 && livePlayers(room).length > 1) return settleAllInOrAdvance(room);
   resetBets(room);
   if (room.phase === "preflop") {
     room.board.push(room.deck.pop(), room.deck.pop(), room.deck.pop());
@@ -366,7 +374,7 @@ function showdown(room) {
     room.showdownResult = null;
     return;
   }
-  const payouts = distributePots(room, scored);
+  const { payouts, pots } = distributePots(room, scored);
   for (const payout of payouts) {
     payout.player.chips += payout.amount;
     if (room.stats[payout.player.id]) room.stats[payout.player.id].totalProfit += payout.amount;
@@ -377,9 +385,10 @@ function showdown(room) {
       room.stats[p.id].totalProfit -= p.committed;
     }
   });
-  const best = scored.sort((a, b) => compareScore(b.score, a.score))[0].score;
-  const winners = scored.filter((x) => compareScore(x.score, best) === 0).map((x) => x.player.name);
-  const winnerIds = scored.filter((x) => compareScore(x.score, best) === 0).map((x) => x.player.id);
+  const best = scored.slice().sort((a, b) => compareScore(b.score, a.score))[0].score;
+  const winnerIds = [...new Set(payouts.map((payout) => payout.player.id))];
+  const winners = winnerIds.map((winnerId) => room.seats.find((p) => p.id === winnerId)?.name).filter(Boolean);
+  const payoutById = new Map(payouts.map((payout) => [payout.player.id, payout.amount]));
   // Track wins
   winnerIds.forEach((id) => {
     if (room.stats[id]) room.stats[id].handsWon += 1;
@@ -390,21 +399,33 @@ function showdown(room) {
     winnerNames: winners,
     winLabel: best.label,
     pot: room.pot,
+    payouts: payouts.map((payout) => ({
+      id: payout.player.id,
+      name: payout.player.name,
+      amount: payout.amount
+    })),
+    pots,
     players: scored.map((entry) => ({
       id: entry.player.id,
       name: entry.player.name,
       scoreLabel: entry.score.label,
+      payout: payoutById.get(entry.player.id) || 0,
       cards: entry.player.cards,
       folded: entry.player.folded
     }))
   };
-  log(room, `${winners.join("、")} 以${best.label}摊牌，本手结算 ${room.pot}`);
+  if (pots.length === 1) {
+    log(room, `${winners.join("、")} 以${pots[0].winLabel}摊牌，本手结算 ${room.pot}`);
+  } else {
+    log(room, `${pots.length} 个底池完成摊牌结算，本手结算 ${room.pot}`);
+  }
 }
 
 function distributePots(room, scored) {
   const scoreById = new Map(scored.map((entry) => [entry.player.id, entry.score]));
   const levels = [...new Set(room.seats.map((p) => p.committed || 0).filter(Boolean))].sort((a, b) => a - b);
   const payouts = new Map();
+  const pots = [];
   let previous = 0;
   for (const level of levels) {
     const contributors = room.seats.filter((p) => (p.committed || 0) >= level);
@@ -415,17 +436,30 @@ function distributePots(room, scored) {
         .map((player) => ({ player, score: scoreById.get(player.id) }))
         .sort((a, b) => compareScore(b.score, a.score));
       const best = ranked[0].score;
-      const winners = ranked.filter((entry) => compareScore(entry.score, best) === 0);
+      const winners = oddChipOrder(room, ranked.filter((entry) => compareScore(entry.score, best) === 0));
       const share = Math.floor(amount / winners.length);
       const remainder = amount % winners.length;
+      const winnerPayouts = [];
       winners.forEach((entry, idx) => {
-        payouts.set(entry.player, (payouts.get(entry.player) || 0) + share + (idx === 0 ? remainder : 0));
+        const payoutAmount = share + (idx === 0 ? remainder : 0);
+        payouts.set(entry.player, (payouts.get(entry.player) || 0) + payoutAmount);
+        winnerPayouts.push({ id: entry.player.id, name: entry.player.name, amount: payoutAmount });
       });
-      log(room, `${winners.map((entry) => entry.player.name).join("、")} 赢得${amount === room.pot ? "主池" : "边池"} ${amount}`);
+      const isMainPot = pots.length === 0;
+      pots.push({
+        type: isMainPot ? "main" : "side",
+        amount,
+        winLabel: best.label,
+        winners: winnerPayouts
+      });
+      log(room, `${winners.map((entry) => entry.player.name).join("、")} 赢得${isMainPot ? "主池" : "边池"} ${amount}`);
     }
     previous = level;
   }
-  return [...payouts.entries()].map(([player, amount]) => ({ player, amount }));
+  return {
+    payouts: [...payouts.entries()].map(([player, amount]) => ({ player, amount })),
+    pots
+  };
 }
 
 function action(room, playerId, kind, amount = 0) {
@@ -459,6 +493,7 @@ function action(room, playerId, kind, amount = 0) {
   } else if (kind === "raise" || kind === "allIn") {
     const raiseTo = kind === "allIn" ? p.bet + p.chips : Math.max(0, Number(amount) || 0);
     const minTo = room.currentBet + room.minRaise;
+    if (p.acted && toCall > 0 && raiseTo > room.currentBet && !room.bettingReopened) return "短码 All in 未重新开放加注，只能跟注或弃牌。";
     if (raiseTo < minTo && raiseTo < p.bet + p.chips) return `最小加注到 ${minTo}`;
     if (raiseTo <= room.currentBet && raiseTo < p.bet + p.chips) return "加注额需要高于当前注额。";
     const pay = Math.min(p.chips, raiseTo - p.bet);
@@ -471,13 +506,18 @@ function action(room, playerId, kind, amount = 0) {
     p.acted = true;
     if (p.chips === 0) p.allIn = true;
     if (p.bet > room.currentBet) {
+      const fullBetStart = room.reopenBet - room.minRaise;
       room.currentBet = p.bet;
-      const fullRaise = p.bet - oldCurrentBet >= room.minRaise;
+      const fullRaise = p.bet - oldCurrentBet >= room.minRaise || p.bet >= room.reopenBet;
       if (fullRaise) {
-        room.minRaise = Math.max(room.minRaise, p.bet - oldCurrentBet);
+        room.bettingReopened = true;
+        room.minRaise = Math.max(room.minRaise, p.bet - fullBetStart);
+        room.reopenBet = p.bet + room.minRaise;
         room.seats.forEach((other) => {
           if (other.id !== p.id && !other.folded && !other.allIn) other.acted = false;
         });
+      } else {
+        room.bettingReopened = false;
       }
     }
     // Track VPIP
@@ -486,6 +526,14 @@ function action(room, playerId, kind, amount = 0) {
   }
   moveTurn(room);
   return null;
+}
+
+function oddChipOrder(room, winners) {
+  return winners.slice().sort((a, b) => {
+    const aDistance = ((a.player.seat - room.dealer + room.seats.length) % room.seats.length) || room.seats.length;
+    const bDistance = ((b.player.seat - room.dealer + room.seats.length) % room.seats.length) || room.seats.length;
+    return aDistance - bDistance;
+  });
 }
 
 function evaluate(cards) {

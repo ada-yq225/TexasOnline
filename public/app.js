@@ -415,20 +415,26 @@ function showShowdownOverlay(result) {
   const overlay = $("#showdownOverlay");
   if (!overlay) return;
 
-  const winnerNames = result.winnerNames.join("、");
+  const winnerNames = result.winnerNames.map(escapeHtml).join("、");
+  const potLines = (result.pots || []).map((pot, idx) => {
+    const label = pot.type === "main" ? "主池" : `边池 ${idx}`;
+    const names = (pot.winners || []).map((winner) => `${escapeHtml(winner.name)} +${winner.amount}`).join("、");
+    return `<div>${label} ${pot.amount}：${names}（${pot.winLabel}）</div>`;
+  }).join("");
   $("#showdownTitle").textContent = "摊牌结算";
   $("#showdownWinner").innerHTML = `
     <div class="winner-animation">🏆 ${winnerNames} 获胜！</div>
-    <div class="winner-detail">牌型：${result.winLabel} · 赢得底池 ${result.pot}</div>
+    <div class="winner-detail">${potLines || `牌型：${result.winLabel} · 赢得底池 ${result.pot}`}</div>
   `;
 
   const playersHtml = result.players.map((p) => {
     const isWinner = result.winners.includes(p.id);
+    const payout = p.payout ? ` · +${p.payout}` : "";
     const cardsHtml = (p.cards || []).map((c) => cardEl(c).outerHTML).join("");
     return `
       <div class="showdown-player ${isWinner ? "winner" : ""}">
         <span class="sp-name">${isWinner ? "🏆 " : ""}${escapeHtml(p.name)}</span>
-        <span class="sp-score">${p.scoreLabel}</span>
+        <span class="sp-score">${p.scoreLabel}${payout}</span>
         <div class="sp-cards">${cardsHtml}</div>
       </div>
     `;
